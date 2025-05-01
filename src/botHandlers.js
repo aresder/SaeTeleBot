@@ -1,4 +1,6 @@
-import Bot from "../main.js";
+import { ytmp3, ytmp4 } from "@vreden/youtube_scraper";
+import { Bot, cache } from "../main.js";
+import { getAnime } from "./utils.js";
 
 export async function handleRandomAnime(msg) {
   const chatId = msg.chat.id;
@@ -6,15 +8,19 @@ export async function handleRandomAnime(msg) {
 
   try {
     const loadingMessage = await Bot.sendMessage(chatId, "Tunggu ya...", {
-      reply_to_message_id: msg.message_id,
+      reply_to_message_id: messageId,
     });
-    const startTime = performance.now();
-    const resp = await fetch("https://api.nekosapi.com/v4/images/random");
-    const endTime = performance.now();
-    const data = await resp.json();
-    const safeUrls = data.filter((item) => item.rating == "safe");
 
-    if (safeUrls.length < 1) {
+    let startTime = null;
+    let endTime = null;
+    let data = null;
+
+    try {
+      startTime = performance.now();
+      data = await getAnime("sfw");
+      endTime = performance.now();
+    } catch (error) {
+      console.error(error.message);
       await Bot.sendMessage(
         chatId,
         "Gambarnya ga ada nih, coba lagi aja ya...",
@@ -26,7 +32,7 @@ export async function handleRandomAnime(msg) {
       return;
     }
 
-    await Bot.sendPhoto(chatId, safeUrls[0].url, {
+    await Bot.sendPhoto(chatId, data?.url, {
       caption: `Ini bos ${msg.from.first_name} 😋 <i>${(
         endTime - startTime
       ).toFixed(2)}ms</i>`,
@@ -36,182 +42,157 @@ export async function handleRandomAnime(msg) {
     await Bot.deleteMessage(chatId, loadingMessage.message_id);
   } catch (error) {
     console.log(error.message);
+    await Bot.sendMessage(
+      userId,
+      "Error nih, coba lagi ya...\nAdmin @aresder",
+      {
+        reply_to_message_id: userMsgId,
+      }
+    );
   }
 }
 
 export async function handleRandomAnimeh(msg) {
+  const userId = msg.chat.id;
+  const userMsgId = msg.message_id;
+
   try {
     const loadingMessage = await Bot.sendMessage(msg.chat.id, "Tunggu ya...", {
       reply_to_message_id: msg.message_id,
     });
-    const startTime = performance.now();
-    const resp = await fetch("https://api.nekosapi.com/v4/images/random");
-    const endTime = performance.now();
-    const data = await resp.json();
-    const explicitUrls = data.filter((item) => item.rating == "explicit");
 
-    if (explicitUrls.length < 1) {
+    let startTime = null;
+    let endTime = null;
+    let data = null;
+
+    try {
+      startTime = performance.now();
+      data = await getAnime("nsfw");
+      endTime = performance.now();
+    } catch (error) {
+      console.error(error.message);
       await Bot.sendMessage(
-        msg.chat.id,
-        "Gambar yang kamu mau ga ada nih. Coba lagi aja ya..."
+        chatId,
+        "Gambarnya ga ada nih, coba lagi aja ya...",
+        {
+          reply_to_message_id: messageId,
+        }
       );
-      await Bot.deleteMessage(
-        loadingMessage.chat.id,
-        loadingMessage.message_id
-      );
+      await Bot.deleteMessage(chatId, loadingMessage.message_id);
       return;
     }
 
-    await Bot.sendPhoto(msg.chat.id, explicitUrls[0].url, {
+    await Bot.sendPhoto(userId, data?.url, {
       caption: `
 Ini bos ${msg.from.first_name} 😋 <i>${(endTime - startTime).toFixed(2)}ms</i>
 `,
-      reply_to_message_id: msg.message_id,
+      reply_to_message_id: userMsgId,
       parse_mode: "HTML",
     });
     await Bot.deleteMessage(loadingMessage.chat.id, loadingMessage.message_id);
   } catch (error) {
-    console.log(error.message);
+    console.log("Download error:", error.message);
+    await Bot.sendMessage(
+      userId,
+      "Error nih, coba lagi ya...\nAdmin @aresder",
+      {
+        reply_to_message_id: userMsgId,
+      }
+    );
   }
 }
 
-export async function handleYoutubeDownload(msg, url, ytdl) {
-  try {
-    await Bot.sendMessage(msg.chat.id, "Pilih quality video:", {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: "144p",
-              callback_data: "144p",
-            },
-            {
-              text: "240p",
-              callback_data: "240p",
-            },
-            {
-              text: "360p",
-              callback_data: "360p",
-            },
-          ],
-          [
-            {
-              text: "480p",
-              callback_data: "480p",
-            },
-            {
-              text: "720p",
-              callback_data: "720p",
-            },
-            {
-              text: "1080p",
-              callback_data: "1080p",
-            },
-          ],
-        ],
-      },
-      reply_to_message_id: msg.message_id,
-    });
+export async function handleYoutubeDownload(msg, match) {
+  const userId = msg.chat.id;
+  const userMsgId = msg.message_id;
+  const url = msg.link_preview_options?.url;
+  const ytRegex =
+    "(?:https?:\\/\\/)?(?:www\\.|m\\.)?(?:youtube\\.com\\/(?:watch\\?v=|embed\\/|shorts\\/)|youtu\\.be\\/|ytshorts\\.[^\\/]+\\/)([A-Za-z0-9_-]{11})";
 
-    Bot.once("callback_query", async (query) => {
-      let quality = query.data;
+  try {
+    if (!url.match(ytRegex) || !url) {
+      await Bot.sendMessage(userId, "Youtube URL tidak valid", {
+        reply_to_message_id: userMsgId,
+      });
+      return;
+    }
+
+    const qualityOptions = await Bot.sendMessage(
+      userId,
+      `
+Pilih quality video:
+      `,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "360p", callback_data: "360" },
+              { text: "480p", callback_data: "480" },
+              { text: "720p", callback_data: "720" },
+              { text: "1080p", callback_data: "1080" },
+            ],
+          ],
+        },
+        reply_to_message_id: userMsgId,
+      }
+    );
+
+    Bot.on("callback_query", async (q) => {
+      if (q.message.message_id !== qualityOptions.message_id) return;
+
+      const quality = q.data;
 
       try {
-        const downloadMessage = await Bot.sendMessage(
-          msg.chat.id,
-          `
-Downloading... 🍳
-
-<i>*Coba lagi jika tidak ada respon dalam 15 detik</i>
-          `,
+        const processMsg = await Bot.sendMessage(
+          userId,
+          `Downloading... <i>${quality}p</i>`,
           {
-            reply_to_message_id: msg.message_id,
+            reply_to_message_id: userMsgId,
             parse_mode: "HTML",
           }
         );
 
-        await Bot.deleteMessage(
-          query.message.chat.id,
-          query.message.message_id
-        );
+        const cacheKey = `ytInfo:${url}:${quality}`;
+        let mp4 = cache.get(cacheKey);
 
-        const startTime = performance.now();
-        const videoInfo = await ytdl.getInfo(url);
-        const endTime = performance.now();
+        if (!mp4) {
+          console.log("kvnd");
+          mp4 = await ytmp4(url, quality);
+          cache.set(cacheKey, mp4);
+        }
 
-        // const dl = ytdl.downloadFromInfo(videoInfo);
-        // await Bot.sendVideo(msg.chat.id, dl);
-        // return;
-
-        const mp3Filter = videoInfo.formats.filter(
-          (item) =>
-            (item.mimeType.includes("audio/mp4") &&
-              item.audioQuality == "AUDIO_QUALITY_MEDIUM") ||
-            item.mimeType.includes("audio/webm")
-        );
-        const mp4Filter = videoInfo.formats.filter(
-          (item) =>
-            item.mimeType.includes("video/mp4") && item.qualityLabel == quality
-        );
-
-        let videoDownload = true;
-        let audioDownload = true;
-
-        if (mp4Filter.length < 1) videoDownload = false;
-        if (mp3Filter.length < 1) audioDownload = false;
-
-        const { title, viewCount, likes, author } = videoInfo.videoDetails;
+        // const startTime = performance.now();
+        // const mp3 = await ytmp3(url);
+        // const endTime = performance.now();
+        // const respTime = (endTime - startTime).toFixed(2);
 
         await Bot.editMessageText(
           `
-Title: <b>${title.length >= 24 ? title.slice(0, 24) + "..." : title}</b>
-Author: <b>${author.name}</b>
-Quality: ${videoDownload ? `<b>${mp4Filter[0].qualityLabel}</b>` : null}
-Views: <b>${viewCount}</b>
-Likes: <b>${likes}</b>
-<i>${(endTime - startTime).toFixed(2)}ms</i>
+<b>Title</b>: ${mp4.metadata?.title.slice(0, 28) + "..." ?? "Tidak tersedia"}
+<b>Author</b>: ${mp4.metadata?.author.name ?? "Tidak tersedia"}
+<b>Views</b>: ${mp4.metadata?.views ?? "Tidak tersedia"}
+<b>Quality</b>: ${mp4.download?.quality ?? "Tidak tersedia"}
 
-<i>*Jika link download bermasalah, harap coba versi /ytdl_v2</i>
-
-${videoDownload ? "" : `Maaf nih, video quality ${quality} nya ngga ada :(`}
-${audioDownload ? "" : "Maaf nih, audio downloadnya ngga ada :("}
-    `,
+          `,
           {
             reply_markup: {
               inline_keyboard: [
-                videoDownload
-                  ? [{ text: "Mp4 download", url: mp4Filter[0].url }]
-                  : [],
-                audioDownload
-                  ? [
-                      { text: "Mp3 V1", url: mp3Filter[0].url },
-                      {
-                        text: "Mp3 V2",
-                        url: mp3Filter[mp3Filter.length - 1].url,
-                      },
-                      {
-                        text: "Mp3 V3",
-                        url: mp3Filter[mp3Filter.length - 2].url,
-                      },
-                    ]
-                  : [],
+                [
+                  { text: "Mp4", url: mp4.download?.url },
+                  // { text: "Mp3", url: mp3.download?.url },
+                ],
               ],
             },
-            chat_id: downloadMessage.chat.id,
-            message_id: downloadMessage.message_id,
+            chat_id: processMsg.chat.id,
+            message_id: processMsg.message_id,
             parse_mode: "HTML",
           }
         );
       } catch (error) {
-        console.error("Error from callback query:", error.message);
-        await Bot.sendMessage(
-          msg.chat.id,
-          `Error, Coba lagi. \nAdmin: @aresder0`
-        );
+        console.error("Gagal download data:", error.message);
       }
     });
   } catch (error) {
-    console.error("Error from select quality:", error.message);
-    await Bot.sendMessage(msg.chat.id, "Error, Coba lagi. \nAdmin: @aresder0");
+    console.error("Inline keyboard:", error.message);
   }
 }

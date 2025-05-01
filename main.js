@@ -7,11 +7,11 @@ import {
   handleRandomAnimeh,
   handleYoutubeDownload,
 } from "./src/botHandlers.js";
-import ytdl from "@distube/ytdl-core";
-import rs from "ruhend-scraper";
+import NodeCache from "node-cache";
 
 const Bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
-export default Bot;
+const cache = new NodeCache({ stdTTL: 300 });
+export { Bot, cache };
 
 console.log("Bot ready");
 Bot.setMyCommands(botCommands);
@@ -21,52 +21,37 @@ Bot.on("message", async (msg) => {
   );
 });
 
+// Random anime
 Bot.onText(/^\/random_anime$/, handleRandomAnime);
 Bot.onText(/^\/random_animeh$/, handleRandomAnimeh);
 
-Bot.onText(
-  /^(https?:\/\/)?(www\.youtube\.com|youtu\.be)\/.+$/,
-  async (msg, match) => {
-    try {
-      await handleYoutubeDownload(msg, match[0], ytdl);
-    } catch (error) {
-      console.log(error.message);
-    }
-  }
-);
-
-Bot.onText(/^\/ytdl_v1$|ytdl_v2$/, async (msg) => {
-  await Bot.sendMessage(
-    msg.chat.id,
-    `Harap masukkan parameter URL.
-Contoh: /ytdl_v1 https://www.youtube.com/watch?v=dQw4w9WgXcQ
-
-Atau kamu juga bisa langsung <i>paste</i> link videonya tanpa command /ytdl_v1
-`,
-    {
-      disable_web_page_preview: true,
-      reply_to_message_id: msg.message_id,
-      parse_mode: "HTML",
-    }
-  );
-});
-
-Bot.onText(/^\/ytdl_v1\s+(.+)$/, async (msg, match) => {
-  const ytRegex = "^(https?://)?(www.youtube.com|youtu.?be)/.+$";
-  const ytUrl = match[1].match(ytRegex);
-
-  if (!ytUrl) {
+// Youtube downloader | /ytdl
+Bot.onText(/^\/ytdl$/, async (msg) => {
+  try {
     await Bot.sendMessage(
       msg.chat.id,
-      "Harap masukkan url youtube yang valid",
+      `
+Harap masukkan parameter URL.
+Contoh: /ytdl https://www.youtube.com/watch?v=dQw4w9WgXcQ
+
+Atau kamu juga bisa langsung <i>paste</i> link videonya tanpa command /ytdl
+      `,
       {
+        disable_web_page_preview: true,
         reply_to_message_id: msg.message_id,
+        parse_mode: "HTML",
       }
     );
-    return;
+  } catch (error) {
+    console.log("ytdl:", error.message);
   }
-
-  await handleYoutubeDownload(msg, match[1], ytdl);
+});
+Bot.once("message", () => {
+  Bot.onText(
+    /^(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/|ytshorts\.[^\/]+\/)([A-Za-z0-9_-]{11})/,
+    handleYoutubeDownload
+  );
+  Bot.onText(/^\/ytdl\s+(.+)$/, handleYoutubeDownload);
 });
 
 Bot.onText(/^\/igdl\s+(.+)$/, async (msg, match) => {
@@ -103,61 +88,21 @@ Bot.onText(/^\/igdl\s+(.+)$/, async (msg, match) => {
   }
 });
 
-Bot.onText(/^\/ytdl_v2\s+(.+)$/, async (msg, match) => {
-  const userId = msg.chat.id;
-  const url = match[1];
-
-  const ytRegex = "^(https?://)?(www.youtube.com|youtu.?be)/.+$";
-  const ytUrl = match[1].match(ytRegex);
-
-  if (!ytUrl) {
-    await Bot.sendMessage(userId, "Harap masukkan url youtube yang valid", {
-      reply_to_message_id: msg.message_id,
-    });
-    return;
-  }
-
-  const downloadMessage = await Bot.sendMessage(
-    userId,
-    `
-Downloading... 🍳
-
-<i>*Kecepatan download tergantung internet kamu</i>`,
-    {
-      reply_to_message_id: msg.message_id,
-      parse_mode: "HTML",
-    }
-  );
-
+Bot.onText(/^\/t$/, async (msg) => {
+  const categories = ["waifu", "blowjob", "neko"];
+  const suffleCategory =
+    categories[Math.floor(Math.random() * categories.length)] ?? categories[0];
   try {
     const startTime = performance.now();
-    const mp4 = await rs.ytmp4(url);
-    const mp3 = await rs.ytmp3(url);
+    const resp = await fetch(`https://api.waifu.pics/nsfw/${suffleCategory}`);
     const endTime = performance.now();
+    const data = await resp.json();
 
-    await Bot.editMessageText(
-      `
-Title: <b>${mp4.title.slice(0, 24)}...</b>
-Author: <b>${mp4.author}</b>
-Quality: <b>${mp4.quality}</b>
-Views: <b>${mp4.views}</b>
-<i>${(endTime - startTime).toFixed(2)}ms</i>
-      `,
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "Mp4", url: mp4.video },
-              { text: "Mp3", url: mp3.audio_2 },
-            ],
-          ],
-        },
-        chat_id: downloadMessage.chat.id,
-        message_id: downloadMessage.message_id,
-        parse_mode: "HTML",
-      }
-    );
+    await Bot.sendPhoto(msg.chat.id, data.url, {
+      caption: `${(endTime - startTime).toFixed(2)}ms`,
+      reply_to_message_id: msg.message_id,
+    });
   } catch (error) {
-    console.error("Error from ytdl_v2:", error.message);
+    console.log("Gagal get data API:", error.message);
   }
 });
