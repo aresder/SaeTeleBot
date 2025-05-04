@@ -1,8 +1,9 @@
-import { ytmp3, ytmp4 } from "@vreden/youtube_scraper";
 import { Bot, cache } from "../main.js";
-import { getAnime } from "./utils.js";
+import { getAnime, getTiktokData, inlineKeyboardButtons } from "./utils.js";
 
-export async function handleRandomAnime(msg) {
+import { ytmp3, ytmp4 } from "@vreden/youtube_scraper";
+
+async function getPhotoAnime(msg, type) {
   const chatId = msg.chat.id;
   const messageId = msg.message_id;
 
@@ -11,26 +12,9 @@ export async function handleRandomAnime(msg) {
       reply_to_message_id: messageId,
     });
 
-    let startTime = null;
-    let endTime = null;
-    let data = null;
-
-    try {
-      startTime = performance.now();
-      data = await getAnime("sfw");
-      endTime = performance.now();
-    } catch (error) {
-      console.error(error.message);
-      await Bot.sendMessage(
-        chatId,
-        "Gambarnya ga ada nih, coba lagi aja ya...",
-        {
-          reply_to_message_id: messageId,
-        }
-      );
-      await Bot.deleteMessage(chatId, loadingMessage.message_id);
-      return;
-    }
+    const startTime = performance.now();
+    const data = await getAnime(type);
+    const endTime = performance.now();
 
     await Bot.sendPhoto(chatId, data?.url, {
       caption: `Ini bos ${msg.from.first_name} 😋 <i>${(
@@ -41,104 +25,64 @@ export async function handleRandomAnime(msg) {
     });
     await Bot.deleteMessage(chatId, loadingMessage.message_id);
   } catch (error) {
-    console.log(error.message);
-    await Bot.sendMessage(
-      userId,
-      "Error nih, coba lagi ya...\nAdmin @aresder",
-      {
-        reply_to_message_id: userMsgId,
-      }
-    );
+    console.error("ERROR[getAnime]", error.message);
+    await Bot.sendMessage(chatId, "Gambarnya ga ada nih, coba lagi aja ya...", {
+      reply_to_message_id: messageId,
+    });
   }
 }
 
+export async function handleRandomAnime(msg) {
+  await getPhotoAnime(msg, "sfw");
+}
+
 export async function handleRandomAnimeh(msg) {
-  const userId = msg.chat.id;
-  const userMsgId = msg.message_id;
-
-  try {
-    const loadingMessage = await Bot.sendMessage(msg.chat.id, "Tunggu ya...", {
-      reply_to_message_id: msg.message_id,
-    });
-
-    let startTime = null;
-    let endTime = null;
-    let data = null;
-
-    try {
-      startTime = performance.now();
-      data = await getAnime("nsfw");
-      endTime = performance.now();
-    } catch (error) {
-      console.error(error.message);
-      await Bot.sendMessage(
-        chatId,
-        "Gambarnya ga ada nih, coba lagi aja ya...",
-        {
-          reply_to_message_id: messageId,
-        }
-      );
-      await Bot.deleteMessage(chatId, loadingMessage.message_id);
-      return;
-    }
-
-    await Bot.sendPhoto(userId, data?.url, {
-      caption: `
-Ini bos ${msg.from.first_name} 😋 <i>${(endTime - startTime).toFixed(2)}ms</i>
-`,
-      reply_to_message_id: userMsgId,
-      parse_mode: "HTML",
-    });
-    await Bot.deleteMessage(loadingMessage.chat.id, loadingMessage.message_id);
-  } catch (error) {
-    console.log("Download error:", error.message);
-    await Bot.sendMessage(
-      userId,
-      "Error nih, coba lagi ya...\nAdmin @aresder",
-      {
-        reply_to_message_id: userMsgId,
-      }
-    );
-  }
+  await getPhotoAnime(msg, "nsfw");
 }
 
 export async function handleYoutubeDownload(msg, match) {
   const userId = msg.chat.id;
   const userMsgId = msg.message_id;
-  const url = msg.link_preview_options?.url;
+  let url = match["input"];
+
+  if (url.includes("/ytdl")) url = url.replace("/ytdl", "").trim();
+
   const ytRegex =
     "(?:https?:\\/\\/)?(?:www\\.|m\\.)?(?:youtube\\.com\\/(?:watch\\?v=|embed\\/|shorts\\/)|youtu\\.be\\/|ytshorts\\.[^\\/]+\\/)([A-Za-z0-9_-]{11})";
 
-  try {
-    if (!url.match(ytRegex) || !url) {
+  // Memastikan bahwa URL yang diberikan adalah URL Youtube
+  if (!url.match(ytRegex) || !url) {
+    try {
       await Bot.sendMessage(userId, "Youtube URL tidak valid", {
         reply_to_message_id: userMsgId,
       });
-      return;
+    } catch (error) {
+      console.error(`ERROR`, error.message);
     }
+    return;
+  }
 
-    const qualityOptions = await Bot.sendMessage(
+  try {
+    // Kirim button untuk memilih kualitas video
+    const qualityOptions = await inlineKeyboardButtons(
       userId,
-      `
-Pilih quality video:
-      `,
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "360p", callback_data: "360" },
-              { text: "480p", callback_data: "480" },
-              { text: "720p", callback_data: "720" },
-              { text: "1080p", callback_data: "1080" },
-            ],
-          ],
-        },
-        reply_to_message_id: userMsgId,
-      }
+      userMsgId,
+      "Pilih kualitas video",
+      [
+        { text: "360p", callback_data: "360" },
+        { text: "480p", callback_data: "480" },
+        { text: "720p", callback_data: "720" },
+        { text: "1080p", callback_data: "1080" },
+      ]
     );
 
     Bot.on("callback_query", async (q) => {
-      if (q.message.message_id !== qualityOptions.message_id) return;
+      // Cek apakah callback_query berasal dari pesan yang sama
+      if (
+        q.message.message_id !== qualityOptions.message_id ||
+        q.from.id !== userId
+      )
+        return;
 
       const quality = q.data;
 
@@ -152,47 +96,128 @@ Pilih quality video:
           }
         );
 
-        const cacheKey = `ytInfo:${url}:${quality}`;
-        let mp4 = cache.get(cacheKey);
+        const cacheKeyMp4 = `ytInfo:${url}:${quality}`;
+        const cacheKeyMp3 = `ytInfo:${url}`;
+        let startTime = performance.now();
+        let mp4 = cache.get(cacheKeyMp4);
+        let mp3 = cache.get(cacheKeyMp3);
+        let endTime = performance.now();
+        let respTime = (endTime - startTime).toFixed(2);
 
-        if (!mp4) {
-          console.log("kvnd");
-          mp4 = await ytmp4(url, quality);
-          cache.set(cacheKey, mp4);
+        if (!mp4 || !mp3) {
+          startTime = performance.now();
+          [mp4, mp3] = await Promise.all([ytmp4(url, quality), ytmp3(url)]);
+          endTime = performance.now();
+          respTime = (endTime - startTime).toFixed(2);
+          cache.set(cacheKeyMp4, mp4, 3600);
+          cache.set(cacheKeyMp3, mp3, 3600);
         }
 
-        // const startTime = performance.now();
-        // const mp3 = await ytmp3(url);
-        // const endTime = performance.now();
-        // const respTime = (endTime - startTime).toFixed(2);
+        const mp4Url = mp4.download?.url;
+        const mp3Url = mp3.download?.url;
 
-        await Bot.editMessageText(
-          `
-<b>Title</b>: ${mp4.metadata?.title.slice(0, 28) + "..." ?? "Tidak tersedia"}
+        const resultMessage = `
+<b>Title</b>: ${
+          mp4.metadata?.title
+            ? mp4.metadata?.title.slice(0, 28) + "..."
+            : "Tidak tersedia"
+        }
 <b>Author</b>: ${mp4.metadata?.author.name ?? "Tidak tersedia"}
 <b>Views</b>: ${mp4.metadata?.views ?? "Tidak tersedia"}
 <b>Quality</b>: ${mp4.download?.quality ?? "Tidak tersedia"}
+<i>${respTime}</i>
 
-          `,
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: "Mp4", url: mp4.download?.url },
-                  // { text: "Mp3", url: mp3.download?.url },
-                ],
-              ],
-            },
-            chat_id: processMsg.chat.id,
-            message_id: processMsg.message_id,
-            parse_mode: "HTML",
-          }
-        );
+${mp4Url ? "" : "Download video ngga tersedia nih :("}
+${mp3Url ? "" : "Download audio ngga tersedia nih :("}
+`;
+
+        await Bot.editMessageText(resultMessage, {
+          reply_markup: {
+            inline_keyboard: [
+              mp4Url ? [{ text: "Mp4", url: mp4Url }] : [],
+              mp3Url ? [{ text: "Mp3", url: mp3Url }] : [],
+            ],
+          },
+          chat_id: processMsg.chat.id,
+          message_id: processMsg.message_id,
+          parse_mode: "HTML",
+        });
       } catch (error) {
-        console.error("Gagal download data:", error.message);
+        console.error("ERROR[Download data]:", error.message);
       }
     });
   } catch (error) {
-    console.error("Inline keyboard:", error.message);
+    console.error("ERROR[Inline keyboard]:", error.message);
+  }
+}
+
+export async function handleTiktokDownloader(msg, match) {
+  const chatId = msg.chat.id;
+  const messageId = msg.message_id;
+  let url = match["input"];
+
+  if (url.includes("/ttdl")) url = url.replace("/ttdl", "").trim();
+
+  const ttRegex =
+    "https?:\\/\\/(www\\.)?tiktok\\.com\\/@[\\w.-]+\\/video\\/\\d+(\\?[^\\s]*)?|https?:\\/\\/vt\\.tiktok\\.com\\/[\\w\\d]+\\/?";
+
+  if (!url || !url.match(ttRegex)) {
+    try {
+      await Bot.sendMessage(chatId, "Harap masukkan Tiktok URL yang valid", {
+        reply_to_message_id: messageId,
+      });
+    } catch (error) {
+      console.error("ERROR[check Tiktok URL]:", error.message);
+    }
+    return;
+  }
+
+  try {
+    const loadingMessage = await Bot.sendMessage(chatId, "Downloading...", {
+      reply_to_message_id: messageId,
+    });
+    const startTime = performance.now();
+    const data = await getTiktokData(url);
+    const endTime = performance.now();
+    const respTime = (endTime - startTime).toFixed(2);
+
+    if (data.title.length > 28) {
+      data.title = data.title.slice(0, 28) + "...";
+    }
+
+    await Bot.editMessageText(
+      `
+<b>Title</b>: ${data?.title ?? "Tidak tersedia"}
+<b>Author</b>: ${data?.author ?? "Tidak tersedia"}
+<b>Username</b>: ${data?.username ?? "Tidak tersedia"}
+<b>Views</b>: ${data?.views ?? "Tidak tersedia"}
+<b>Comments</b>: ${data?.comment ?? "Tidak tersedia"}
+<i>${respTime}ms</i>
+      `,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "Mp4", url: data?.video },
+              { text: "Mp4 HD", url: data?.video_hd },
+            ],
+            [
+              { text: "Mp4 WM", url: data?.video_wm },
+              { text: "Mp3", url: data?.music },
+            ],
+          ],
+        },
+        chat_id: chatId,
+        message_id: loadingMessage.message_id,
+        parse_mode: "HTML",
+      }
+    );
+  } catch (error) {
+    console.error("ERROR[getTiktokData]:", error.message);
+    await Bot.sendMessage(
+      chatId,
+      "Gagal download data video tiktok. Harap link tiktok sudah benar ya...",
+      { reply_to_message_id: messageId }
+    );
   }
 }

@@ -10,7 +10,12 @@ const botCommands = [
   {
     command: "ytdl",
     description:
-      "/ytdl (space) URL | Download Mp4 & Mp3 file from youtube video",
+      "/ytdl (space) YT_URL | Download Mp4 & Mp3 file from youtube video",
+  },
+  {
+    command: "ttdl",
+    description:
+      "/ttdl (space) TT_URL | Download Mp4 & Mp3 file from tiktok video",
   },
   {
     command: "igdl",
