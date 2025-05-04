@@ -17,10 +17,10 @@ const botCommands = [
     description:
       "/ttdl (space) TT_URL | Download Mp4 & Mp3 file from tiktok video",
   },
-  {
-    command: "igdl",
-    description: "Download video from reels",
-  },
+  // {
+  //   command: "igdl",
+  //   description: "Download video from reels",
+  // },
 ];
 
 export default botCommands;

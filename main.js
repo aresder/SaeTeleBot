@@ -56,6 +56,7 @@ Atau kamu juga bisa langsung <i>paste</i> link videonya tanpa command /ytdl
   }
 });
 
+// Tiktok downloader | /ttdl
 Bot.onText(/^\/ttdl\s+(.+)$/, handleTiktokDownloader);
 Bot.onText(
   /^https?:\/\/(www\.)?tiktok\.com\/@[\w.-]+\/video\/\d+(?:\?[^\\s]*)?$|^https?:\/\/vt\.tiktok\.com\/[\w\d]+\/?$/,
@@ -82,36 +83,36 @@ Atau kamu juga bisa langsung <i>paste</i> link videonya tanpa command /ttdl
   }
 });
 
-Bot.onText(/^\/igdl\s+(.+)$/, async (msg, match) => {
-  // const reelsRegex = "https?://(www.)?instagram.com/reels/([a-zA-Z0-9_-]+)/?";
-  // const igURL = match[1].match(reelsRegex);
+// Bot.onText(/^\/igdl\s+(.+)$/, async (msg, match) => {
+//   // const reelsRegex = "https?://(www.)?instagram.com/reels/([a-zA-Z0-9_-]+)/?";
+//   // const igURL = match[1].match(reelsRegex);
 
-  // if (!igURL) {
-  //   return;
-  // }
+//   // if (!igURL) {
+//   //   return;
+//   // }
 
-  try {
-    const loadingMessage = await Bot.sendMessage(msg.chat.id, "Tunggu ya...", {
-      reply_to_message_id: msg.message_id,
-    });
-    const startTime = performance.now();
-    const resp = await rs.igdl(match[1]);
-    const endTime = performance.now();
-    const url = resp.data[0].url;
-    await Bot.sendMessage(
-      msg.chat.id,
-      `Harap di buka di <b>eksternal</b> browser seperti Chrome, Edge, Brave, Safari.
-<i>${(endTime - startTime).toFixed(2)}ms</i>`,
-      {
-        reply_markup: {
-          inline_keyboard: [[{ text: "Hold to copy", url }]],
-        },
-        reply_to_message_id: msg.message_id,
-        parse_mode: "HTML",
-      }
-    );
-    await Bot.deleteMessage(loadingMessage.chat.id, loadingMessage.message_id);
-  } catch (error) {
-    console.log(error.message);
-  }
-});
+//   try {
+//     const loadingMessage = await Bot.sendMessage(msg.chat.id, "Tunggu ya...", {
+//       reply_to_message_id: msg.message_id,
+//     });
+//     const startTime = performance.now();
+//     const resp = await rs.igdl(match[1]);
+//     const endTime = performance.now();
+//     const url = resp.data[0].url;
+//     await Bot.sendMessage(
+//       msg.chat.id,
+//       `Harap di buka di <b>eksternal</b> browser seperti Chrome, Edge, Brave, Safari.
+// <i>${(endTime - startTime).toFixed(2)}ms</i>`,
+//       {
+//         reply_markup: {
+//           inline_keyboard: [[{ text: "Hold to copy", url }]],
+//         },
+//         reply_to_message_id: msg.message_id,
+//         parse_mode: "HTML",
+//       }
+//     );
+//     await Bot.deleteMessage(loadingMessage.chat.id, loadingMessage.message_id);
+//   } catch (error) {
+//     console.log(error.message);
+//   }
+// });
