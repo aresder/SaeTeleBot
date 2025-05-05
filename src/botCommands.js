@@ -1,12 +1,17 @@
 const botCommands = [
   {
+    command: "ai",
+    description:
+      "/ai (space) question | Text generator using Qwen3-235B-A22B ai model",
+  },
+  {
     command: "random_anime",
     description: "Get random anime from internet",
   },
-  {
-    command: "random_animeh",
-    description: "Get random anime from internet (18+)",
-  },
+  // {
+  //   command: "random_animeh",
+  //   description: "Get random anime from internet (18+)",
+  // },
   {
     command: "ytdl",
     description:
