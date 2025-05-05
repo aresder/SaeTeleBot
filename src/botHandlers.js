@@ -1,7 +1,10 @@
-import { Bot, cache } from "../main.js";
-import { getAnime, getTiktokData, inlineKeyboardButtons } from "./utils.js";
-
-import { ytmp3, ytmp4 } from "@vreden/youtube_scraper";
+import { Bot } from "../main.js";
+import {
+  getAnime,
+  getTiktokData,
+  getYoutubeData,
+  inlineKeyboardButtons,
+} from "./utils.js";
 
 async function getPhotoAnime(msg, type) {
   const chatId = msg.chat.id;
@@ -96,22 +99,10 @@ export async function handleYoutubeDownload(msg, match) {
           }
         );
 
-        const cacheKeyMp4 = `ytInfo:${url}:${quality}`;
-        const cacheKeyMp3 = `ytInfo:${url}`;
-        let startTime = performance.now();
-        let mp4 = cache.get(cacheKeyMp4);
-        let mp3 = cache.get(cacheKeyMp3);
-        let endTime = performance.now();
-        let respTime = (endTime - startTime).toFixed(2);
-
-        if (!mp4 || !mp3) {
-          startTime = performance.now();
-          [mp4, mp3] = await Promise.all([ytmp4(url, quality), ytmp3(url)]);
-          endTime = performance.now();
-          respTime = (endTime - startTime).toFixed(2);
-          cache.set(cacheKeyMp4, mp4, 3600);
-          cache.set(cacheKeyMp3, mp3, 3600);
-        }
+        const data = await getYoutubeData(url, quality);
+        const mp4 = data.mp4;
+        const mp3 = data.mp3;
+        const respTime = data.respTime;
 
         const mp4Url = mp4.download?.url;
         const mp3Url = mp3.download?.url;

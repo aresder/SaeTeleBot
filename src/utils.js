@@ -1,4 +1,5 @@
-import { Bot } from "../main.js";
+import { ytmp3, ytmp4 } from "@vreden/youtube_scraper";
+import { Bot, cache } from "../main.js";
 import rs from "ruhend-scraper";
 
 // Get random anime from api.waifu.pics by rating/type photo
@@ -23,6 +24,27 @@ export async function getAnime(type = "sfw") {
     console.error("Gagal mengambil data API:", error.message);
     throw new Error("Gagal mengambil data API");
   }
+}
+
+export async function getYoutubeData(url, quality) {
+  const cacheKeyMp4 = `ytInfo:${url}:${quality}`;
+  const cacheKeyMp3 = `ytInfo:${url}`;
+  let startTime = performance.now();
+  let mp4 = cache.get(cacheKeyMp4);
+  let mp3 = cache.get(cacheKeyMp3);
+  let endTime = performance.now();
+  let respTime = (endTime - startTime).toFixed(2);
+
+  if (!mp4 || !mp3) {
+    startTime = performance.now();
+    [mp4, mp3] = await Promise.all([ytmp4(url, quality), ytmp3(url)]);
+    endTime = performance.now();
+    respTime = (endTime - startTime).toFixed(2);
+    cache.set(cacheKeyMp4, mp4, 3600);
+    cache.set(cacheKeyMp3, mp3, 3600);
+  }
+
+  return { mp4, mp3, respTime };
 }
 
 export async function getTiktokData(url) {
